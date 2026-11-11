@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "listrikku"
+version = "0.1.0"
+description = "Pencatat meteran listrik + estimasi tagihan PLN"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Hafizd Ammar" }]
+
+[project.scripts]
+listrikku = "listrikku.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["listrikku*"]
