@@ -32,7 +32,7 @@ class ListrikKuError(ValueError):
 
 def data_kosong():
     """Struktur data awal yang masih kosong."""
-    return {"daya": None, "rtm": False, "bacaan": []}
+    return {"daya": None, "rtm": False, "bacaan": [], "token": []}
 
 
 def muat(path):
@@ -44,6 +44,7 @@ def muat(path):
     data.setdefault("daya", None)
     data.setdefault("rtm", False)
     data.setdefault("bacaan", [])
+    data.setdefault("token", [])
     return data
 
 

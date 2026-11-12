@@ -131,7 +131,8 @@ class TestPemakaianBulan(unittest.TestCase):
 class TestMuatSimpan(unittest.TestCase):
     def test_muat_file_tidak_ada_kosong(self):
         data = model.muat("/tmp/listrikku-tidak-ada-xyz.json")
-        self.assertEqual(data, {"daya": None, "rtm": False, "bacaan": []})
+        self.assertEqual(data, {"daya": None, "rtm": False, "bacaan": [],
+                                "token": []})
 
     def test_simpan_lalu_muat_sama(self):
         import tempfile

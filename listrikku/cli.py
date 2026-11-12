@@ -10,7 +10,7 @@ import argparse
 import os
 import sys
 
-from . import __version__, model, tarif
+from . import __version__, model, tarif, token
 
 
 def _nama_bulan(bulan):
@@ -67,6 +67,18 @@ def _parser():
         "laporan", help="Laporan pemakaian satu bulan + perbandingan.")
     laporan.add_argument("--bulan", required=True,
                          help="Bulan yang dilaporkan, format YYYY-MM.")
+
+    token_p = sub.add_parser(
+        "token", help="Token listrik prabayar: beli & cek sisa.")
+    token_sub = token_p.add_subparsers(dest="aksi", required=True)
+    t_beli = token_sub.add_parser(
+        "beli", help="Beli token: hitung kWh dari nominal rupiah.")
+    t_beli.add_argument("--nominal", required=True,
+                        help="Nominal rupiah, misal 100000 (min Rp20.000).")
+    t_beli.add_argument("--ppj", default=0.0,
+                        help="PPJ daerah dalam persen (bawaan: 0).")
+    t_beli.add_argument("--tanggal", default=None,
+                        help="Tanggal beli YYYY-MM-DD (bawaan: hari ini).")
 
     return p
 
@@ -242,6 +254,26 @@ def _cmd_laporan(args):
               "elektronik di rumah.")
 
 
+def _cmd_token_beli(args):
+    try:
+        nominal = float(args.nominal)
+    except (TypeError, ValueError):
+        raise model.ListrikKuError(
+            f"Nominal '{args.nominal}' tidak valid "
+            "(pakai angka, misal: listrikku token beli --nominal 100000)")
+    data = model.muat(args.data)
+    entri, hasil = token.beli_token(data, nominal, args.ppj, args.tanggal)
+    model.simpan(args.data, data)
+    print(f"Token {entri['tanggal']}: {_format_rupiah(entri['nominal'])} "
+          f"-> {_format_kwh(entri['kwh'])} kWh")
+    print(f"Daya terpasang : {_format_daya(data['daya'], data['rtm'])}")
+    if hasil["ppj_persen"]:
+        print(f"PPJ {hasil['ppj_persen']:g}% dipotong: "
+              f"nilai token {_format_rupiah(hasil['bersih'])}")
+    print("Pembelian tercatat — cek perkiraan sisanya dengan "
+          "'token sisa'.")
+
+
 def main(argv=None):
     args = _parser().parse_args(argv)
     try:
@@ -261,6 +293,8 @@ def main(argv=None):
             _cmd_pakai(args)
         elif args.perintah == "laporan":
             _cmd_laporan(args)
+        elif args.perintah == "token" and args.aksi == "beli":
+            _cmd_token_beli(args)
     except model.ListrikKuError as e:
         print(f"listrikku: {e}", file=sys.stderr)
         return 1
