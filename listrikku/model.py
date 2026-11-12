@@ -5,6 +5,7 @@ dan diperiksa manual oleh pengguna:
 
     {
       "daya": 1300,
+      "rtm": false,
       "bacaan": [
         {"tanggal": "2026-11-01", "kwh": 1234.5},
         {"tanggal": "2026-11-12", "kwh": 1280.0}
@@ -12,10 +13,12 @@ dan diperiksa manual oleh pengguna:
     }
 
 `daya` (VA) diisi lewat perintah `daya atur` — dipakai nanti untuk
-estimasi tagihan. `bacaan` selalu disimpan terurut berdasarkan tanggal;
+estimasi tagihan. `rtm` menandai golongan 900 VA RTM (tanpa subsidi).
+`bacaan` selalu disimpan terurut berdasarkan tanggal;
 angka kWh meteran hanya bisa naik (tidak pernah turun).
 """
 
+import calendar
 import json
 import os
 from datetime import date, datetime
@@ -29,7 +32,7 @@ class ListrikKuError(ValueError):
 
 def data_kosong():
     """Struktur data awal yang masih kosong."""
-    return {"daya": None, "bacaan": []}
+    return {"daya": None, "rtm": False, "bacaan": []}
 
 
 def muat(path):
@@ -39,6 +42,7 @@ def muat(path):
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
     data.setdefault("daya", None)
+    data.setdefault("rtm", False)
     data.setdefault("bacaan", [])
     return data
 
@@ -144,3 +148,36 @@ def hitung_pemakaian(data):
             "rata_harian": round(kwh / hari, 3),
         })
     return periode
+
+
+def pemakaian_bulan(data, tahun, bulan):
+    """Pemakaian listrik dalam satu bulan kalender.
+
+    Setiap periode antar bacaan dibagi ke bulan-bulan yang dilewatinya
+    secara proporsional per hari. Mengembalikan total kWh, jumlah hari
+    yang tercakup data dalam bulan itu, dan rata-rata kWh per hari
+    (total dibagi hari tercakup — bukan dibagi jumlah hari sebulan,
+    supaya bulan yang bacaannya belum lengkap tidak terlihat kecil).
+    """
+    awal_bulan = date(tahun, bulan, 1)
+    akhir_bulan = date(tahun, bulan, calendar.monthrange(tahun, bulan)[1])
+    total_kwh = 0.0
+    hari_tercakup = 0
+    for p in hitung_pemakaian(data):
+        t_awal = datetime.strptime(p["dari"], "%Y-%m-%d").date()
+        t_akhir = datetime.strptime(p["sampai"], "%Y-%m-%d").date()
+        awal = max(t_awal, awal_bulan)
+        akhir = min(t_akhir, akhir_bulan)
+        tumpang = (akhir - awal).days
+        if tumpang <= 0:
+            continue
+        total_kwh += p["kwh"] * tumpang / p["hari"]
+        hari_tercakup += tumpang
+    rata = round(total_kwh / hari_tercakup, 3) if hari_tercakup else 0.0
+    return {
+        "tahun": tahun,
+        "bulan": bulan,
+        "kwh": round(total_kwh, 3),
+        "hari_tercakup": hari_tercakup,
+        "rata_harian": rata,
+    }

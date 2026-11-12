@@ -10,7 +10,14 @@ import argparse
 import os
 import sys
 
-from . import __version__, model
+from . import __version__, model, tarif
+
+
+def _nama_bulan(bulan):
+    """Nama bulan Indonesia (1-12)."""
+    return ["", "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+            "Juli", "Agustus", "September", "Oktober", "November",
+            "Desember"][bulan]
 
 
 def _parser():
@@ -41,12 +48,40 @@ def _parser():
     m_hapus.add_argument("nomor", type=int,
                          help="Nomor bacaan dari 'meter daftar'.")
 
+    daya = sub.add_parser("daya", help="Atur / lihat daya terpasang.")
+    daya_sub = daya.add_subparsers(dest="aksi", required=True)
+    d_atur = daya_sub.add_parser("atur", help="Atur daya terpasang (VA).")
+    d_atur.add_argument("va", type=int,
+                        help="Daya terpasang, misal 450, 900, 1300, 2200.")
+    d_atur.add_argument("--rtm", action="store_true",
+                        help="Golongan 900 VA RTM (tanpa subsidi).")
+    daya_sub.add_parser("lihat", help="Lihat daya terpasang saat ini.")
+
+    tagihan = sub.add_parser(
+        "tagihan", help="Perkirakan tagihan bulan berjalan (pascabayar).")
+    tagihan.add_argument("--ppj", type=float, default=0.0,
+                         help="PPJ daerah dalam persen (bawaan: 0).")
+
     return p
 
 
 def _format_kwh(kwh):
     """Tampilkan kWh dengan pemisah ribuan ala Indonesia."""
     return f"{kwh:,.1f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _format_rupiah(nilai, desimal=0):
+    """Tampilkan rupiah ala Indonesia, misal Rp1.444,70 atau Rp177.798."""
+    teks = f"{nilai:,.{desimal}f}"
+    return "Rp" + teks.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _format_daya(daya, rtm=False):
+    """Tampilkan daya + golongan + tarif, misal '1.300 VA (R-1/TR)'."""
+    golongan, tarif_kwh = tarif.golongan_dan_tarif(daya, rtm)
+    va = f"{daya:,}".replace(",", ".")
+    return (f"{va} VA ({golongan}) — "
+            f"{_format_rupiah(tarif_kwh, desimal=2)}/kWh")
 
 
 def _cmd_meter_tambah(args):
@@ -78,6 +113,60 @@ def _cmd_meter_hapus(args):
     print(f"Bacaan {hapus['tanggal']} ({_format_kwh(hapus['kwh'])} kWh) dihapus.")
 
 
+def _cmd_daya_atur(args):
+    data = model.muat(args.data)
+    tarif.atur_daya(data, args.va, args.rtm)
+    model.simpan(args.data, data)
+    print(f"Daya terpasang diatur ke {_format_daya(data['daya'], data['rtm'])}.")
+
+
+def _cmd_daya_lihat(args):
+    data = model.muat(args.data)
+    if not data["daya"]:
+        print("Daya belum diatur. Atur dulu dengan 'daya atur <VA>', "
+              "misal: listrikku daya atur 1300")
+        return
+    print(f"Daya terpasang: {_format_daya(data['daya'], data['rtm'])}.")
+
+
+def _cmd_tagihan(args):
+    data = model.muat(args.data)
+    if not data["daya"]:
+        raise model.ListrikKuError(
+            "Daya belum diatur — tagihan tidak bisa dihitung tanpa tarif. "
+            "Atur dulu dengan 'daya atur <VA>', misal: "
+            "listrikku daya atur 1300")
+    proyeksi = tarif.proyeksi_bulan_berjalan(data)
+    hasil = tarif.hitung_tagihan(
+        proyeksi["proyeksi_kwh"], data["daya"], data["rtm"], args.ppj)
+    bulan = _nama_bulan(proyeksi["bulan"])
+    print(f"Perkiraan tagihan {bulan} {proyeksi['tahun']} (pascabayar)")
+    print(f"Daya terpasang : {_format_daya(data['daya'], data['rtm'])}")
+    if proyeksi["sumber"] == "bulan ini":
+        print(f"Rata-rata harian: {_format_kwh(proyeksi['rata_harian'])} "
+              "kWh/hari (dari bacaan bulan ini)")
+    else:
+        print(f"Rata-rata harian: {_format_kwh(proyeksi['rata_harian'])} "
+              "kWh/hari (belum ada bacaan bulan ini — memakai rata-rata "
+              "periode terakhir)")
+    print(f"Proyeksi sebulan: {_format_kwh(proyeksi['proyeksi_kwh'])} kWh "
+          f"({proyeksi['hari_bulan']} hari)")
+    print(f"Rekening minimum: {_format_kwh(hasil['minimum_kwh'])} kWh "
+          "(40 jam nyala x daya)")
+    if hasil["di_bawah_minimum"]:
+        print("Pemakaian di bawah rekening minimum — ditagih sebesar "
+              "rekening minimum.")
+    print(f"Ditagih         : {_format_kwh(hasil['ditagih_kwh'])} kWh x "
+          f"{_format_rupiah(hasil['tarif'], desimal=2)} = "
+          f"{_format_rupiah(hasil['biaya'])}")
+    if hasil["ppj_persen"]:
+        print(f"PPJ {hasil['ppj_persen']:g}%          : "
+              f"{_format_rupiah(hasil['ppj_rp'])}")
+    print(f"Perkiraan total : {_format_rupiah(hasil['total'])}")
+    print("Ini perkiraan dari rata-rata harianmu — tagihan resmi PLN "
+          "bisa berbeda.")
+
+
 def main(argv=None):
     args = _parser().parse_args(argv)
     try:
@@ -87,6 +176,12 @@ def main(argv=None):
             _cmd_meter_daftar(args)
         elif args.perintah == "meter" and args.aksi == "hapus":
             _cmd_meter_hapus(args)
+        elif args.perintah == "daya" and args.aksi == "atur":
+            _cmd_daya_atur(args)
+        elif args.perintah == "daya" and args.aksi == "lihat":
+            _cmd_daya_lihat(args)
+        elif args.perintah == "tagihan":
+            _cmd_tagihan(args)
     except model.ListrikKuError as e:
         print(f"listrikku: {e}", file=sys.stderr)
         return 1

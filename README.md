@@ -71,6 +71,21 @@ listrikku tagihan
 listrikku tagihan --ppj 3
 ```
 
+Cara menghitungnya: rata-rata harian dari bacaan bulan ini dikali
+jumlah hari sebulan. Bila belum ada bacaan bulan ini, dipakai rata-rata
+periode terakhir — dan itu ditulis jelas di hasil, bukan disembunyikan.
+Tagihan memakai rekening minimum 40 jam nyala × daya terpasang: bila
+proyeksi pemakaianmu di bawah itu, yang ditagih adalah rekening
+minimumnya. Ingat, ini perkiraan — tagihan resmi PLN bisa berbeda.
+
+Daya tersimpan di `listrikku.json`, jadi cukup diatur sekali:
+
+```bash
+listrikku daya atur 1300
+listrikku daya atur 900 --rtm   # golongan 900 VA RTM (tanpa subsidi)
+listrikku daya lihat
+```
+
 Laporan bulanan + peringatan bila pemakaian melonjak dari rata-rata:
 
 ```bash
