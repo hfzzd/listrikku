@@ -92,6 +92,13 @@ Laporan bulanan + peringatan bila pemakaian melonjak dari rata-rata:
 listrikku laporan --bulan 2026-11
 ```
 
+Laporan menampilkan total kWh bulan itu, rata-rata harian, dan
+perbandingan dengan bulan sebelumnya bila ada datanya. Bila rata-rata
+harian bulan ini naik lebih dari 20% dari bulan lalu, ListrikKu memberi
+peringatan "pemakaian melonjak" — tanda untuk memeriksa alat elektronik
+di rumah. Perintah `pakai` menampilkan tabel yang sama antar bacaan:
+tanggal, jumlah hari, kWh terpakai, dan rata-rata harian tiap periode.
+
 Salah catat? Hapus berdasarkan nomor di `meter daftar`:
 
 ```bash

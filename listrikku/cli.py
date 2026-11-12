@@ -62,6 +62,12 @@ def _parser():
     tagihan.add_argument("--ppj", type=float, default=0.0,
                          help="PPJ daerah dalam persen (bawaan: 0).")
 
+    sub.add_parser("pakai", help="Tampilkan pemakaian antar bacaan.")
+    laporan = sub.add_parser(
+        "laporan", help="Laporan pemakaian satu bulan + perbandingan.")
+    laporan.add_argument("--bulan", required=True,
+                         help="Bulan yang dilaporkan, format YYYY-MM.")
+
     return p
 
 
@@ -167,6 +173,69 @@ def _cmd_tagihan(args):
           "bisa berbeda.")
 
 
+def _cmd_pakai(args):
+    data = model.muat(args.data)
+    periode = model.hitung_pemakaian(data)
+    if not periode:
+        raise model.ListrikKuError(
+            "Belum ada periode pemakaian — catat minimal 2 bacaan dulu "
+            "dengan 'meter tambah'.")
+    print(f"{'Dari':<10}  {'Sampai':<10}  {'Hari':>4}  "
+          f"{'Pakai (kWh)':>12}  {'Rata-rata/hari':>14}")
+    total_kwh = 0.0
+    total_hari = 0
+    for p in periode:
+        print(f"{p['dari']:<10}  {p['sampai']:<10}  {p['hari']:>4}  "
+              f"{_format_kwh(p['kwh']):>12}  "
+              f"{_format_kwh(p['rata_harian']):>14}")
+        total_kwh += p["kwh"]
+        total_hari += p["hari"]
+    print(f"Total: {_format_kwh(total_kwh)} kWh dalam {total_hari} hari "
+          f"(rata-rata {_format_kwh(total_kwh / total_hari)} kWh/hari).")
+
+
+def _cmd_laporan(args):
+    data = model.muat(args.data)
+    try:
+        tahun, bulan = (int(x) for x in args.bulan.split("-"))
+        if not (1 <= bulan <= 12) or len(args.bulan) != 7:
+            raise ValueError
+    except ValueError:
+        raise model.ListrikKuError(
+            f"Bulan '{args.bulan}' tidak valid "
+            "(pakai format YYYY-MM, misal 2026-11).")
+    ini = model.pemakaian_bulan(data, tahun, bulan)
+    if ini["hari_tercakup"] == 0:
+        raise model.ListrikKuError(
+            f"Belum ada bacaan untuk {_nama_bulan(bulan)} {tahun} — "
+            "catat meteran dulu dengan 'meter tambah'.")
+    lalu_tahun, lalu_bulan = ((tahun, bulan - 1) if bulan > 1
+                             else (tahun - 1, 12))
+    lalu = model.pemakaian_bulan(data, lalu_tahun, lalu_bulan)
+    print(f"Laporan pemakaian {_nama_bulan(bulan)} {tahun}")
+    print(f"Total pemakaian : {_format_kwh(ini['kwh'])} kWh "
+          f"({ini['hari_tercakup']} hari tercakup data)")
+    print(f"Rata-rata harian: {_format_kwh(ini['rata_harian'])} kWh/hari")
+    if lalu["hari_tercakup"] == 0 or lalu["rata_harian"] == 0:
+        print(f"Belum ada data {_nama_bulan(lalu_bulan)} {lalu_tahun} "
+              "untuk perbandingan.")
+        return
+    selisih = ((ini["rata_harian"] - lalu["rata_harian"])
+               / lalu["rata_harian"] * 100)
+    if selisih > 0:
+        arah = f"naik {selisih:.0f}%"
+    elif selisih < 0:
+        arah = f"turun {abs(selisih):.0f}%"
+    else:
+        arah = "sama"
+    print(f"Bulan lalu ({_nama_bulan(lalu_bulan)} {lalu_tahun}): "
+          f"rata-rata {_format_kwh(lalu['rata_harian'])} kWh/hari — {arah}.")
+    if selisih > 20:
+        print("⚠ Pemakaian melonjak! Rata-rata harian bulan ini naik "
+              "lebih dari 20% dari bulan lalu — cek pemakaian alat "
+              "elektronik di rumah.")
+
+
 def main(argv=None):
     args = _parser().parse_args(argv)
     try:
@@ -182,6 +251,10 @@ def main(argv=None):
             _cmd_daya_lihat(args)
         elif args.perintah == "tagihan":
             _cmd_tagihan(args)
+        elif args.perintah == "pakai":
+            _cmd_pakai(args)
+        elif args.perintah == "laporan":
+            _cmd_laporan(args)
     except model.ListrikKuError as e:
         print(f"listrikku: {e}", file=sys.stderr)
         return 1
