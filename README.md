@@ -108,6 +108,43 @@ listrikku meter hapus 2
 Semua perintah menerima `--data berkas.json` untuk memakai file data
 lain (bawaan: `listrikku.json` di folder berjalan, atau `$LISTRIKKU_DATA`).
 
+## Mencoba dengan data contoh
+
+Repo ini menyertakan data contoh dua bulan (`contoh/listrikku-contoh.json`):
+rumah 1.300 VA dengan bacaan 1 Okt 2026 (1.000 kWh), 15 Okt (1.050 kWh),
+1 Nov (1.104 kWh), dan 12 Nov (1.140 kWh).
+
+```bash
+listrikku --data contoh/listrikku-contoh.json pakai
+listrikku --data contoh/listrikku-contoh.json laporan --bulan 2026-11
+listrikku --data contoh/listrikku-contoh.json tagihan
+```
+
+Angka yang keluar sudah diverifikasi cocok dengan hitungan tangan:
+
+- Pemakaian: 50 kWh / 14 hari, lalu 54 kWh / 17 hari, lalu 36 kWh / 11 hari
+  (total 140 kWh dalam 42 hari).
+- Oktober 2026: 100,8 kWh (30 hari tercakup, rata-rata 3,4 kWh/hari) —
+  50 kWh penuh dari periode pertama + 54 × 16/17 hari dari periode kedua.
+- November 2026: 36,0 kWh (11 hari tercakup, rata-rata 3,3 kWh/hari) —
+  turun 3% dari Oktober, jadi tanpa peringatan lonjakan.
+- Perkiraan tagihan November: rata-rata 3,273 kWh/hari × 30 hari =
+  98,2 kWh × Rp1.444,70 = Rp141.855 (di atas rekening minimum 52 kWh);
+  dengan PPJ 3% menjadi Rp146.111.
+
+## Menjalankan test
+
+Tanpa dependensi tambahan (unittest bawaan Python):
+
+```bash
+python -m unittest discover -s tests
+```
+
+Test mencakup model (tambah/daftar/hapus, tanggal duplikat, angka turun,
+hitung pemakaian), tarif (semua golongan, rekening minimum, PPJ),
+laporan, dan CLI end-to-end (alur catat → pakai → tagihan → laporan;
+input salah keluar dengan kode 1).
+
 ## Format data
 
 Satu file JSON, mudah dibaca dan dicadangkan manual:

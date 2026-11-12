@@ -54,10 +54,10 @@ def golongan_dan_tarif(daya, rtm=False):
 
 def atur_daya(data, daya, rtm=False):
     """Simpan daya terpasang ke data (validasi dulu via tarif)."""
+    golongan_dan_tarif(daya, rtm)  # validasi (termasuk bukan-angka)
     if rtm and int(daya) != 900:
         raise model.ListrikKuError(
             "--rtm hanya berlaku untuk daya 900 VA (golongan RTM).")
-    golongan_dan_tarif(daya, rtm)  # validasi
     data["daya"] = int(daya)
     data["rtm"] = bool(rtm)
     return data["daya"]

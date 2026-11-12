@@ -39,19 +39,19 @@ def _parser():
     m_tambah = meter_sub.add_parser("tambah", help="Catat satu bacaan.")
     m_tambah.add_argument("--tanggal", default=None,
                           help="Tanggal YYYY-MM-DD (bawaan: hari ini).")
-    m_tambah.add_argument("--kwh", required=True, type=float,
+    m_tambah.add_argument("--kwh", required=True,
                           help="Angka kWh yang tampil di meteran.")
     m_tambah.add_argument("--catatan", default=None,
                           help="Catatan singkat (opsional).")
     meter_sub.add_parser("daftar", help="Tampilkan semua bacaan.")
     m_hapus = meter_sub.add_parser("hapus", help="Hapus satu bacaan.")
-    m_hapus.add_argument("nomor", type=int,
+    m_hapus.add_argument("nomor",
                          help="Nomor bacaan dari 'meter daftar'.")
 
     daya = sub.add_parser("daya", help="Atur / lihat daya terpasang.")
     daya_sub = daya.add_subparsers(dest="aksi", required=True)
     d_atur = daya_sub.add_parser("atur", help="Atur daya terpasang (VA).")
-    d_atur.add_argument("va", type=int,
+    d_atur.add_argument("va",
                         help="Daya terpasang, misal 450, 900, 1300, 2200.")
     d_atur.add_argument("--rtm", action="store_true",
                         help="Golongan 900 VA RTM (tanpa subsidi).")
@@ -59,7 +59,7 @@ def _parser():
 
     tagihan = sub.add_parser(
         "tagihan", help="Perkirakan tagihan bulan berjalan (pascabayar).")
-    tagihan.add_argument("--ppj", type=float, default=0.0,
+    tagihan.add_argument("--ppj", default=0.0,
                          help="PPJ daerah dalam persen (bawaan: 0).")
 
     sub.add_parser("pakai", help="Tampilkan pemakaian antar bacaan.")
@@ -113,8 +113,14 @@ def _cmd_meter_daftar(args):
 
 
 def _cmd_meter_hapus(args):
+    try:
+        nomor = int(args.nomor)
+    except (TypeError, ValueError):
+        raise model.ListrikKuError(
+            f"Nomor bacaan '{args.nomor}' tidak valid "
+            "(pakai angka, misal: listrikku meter hapus 2)")
     data = model.muat(args.data)
-    hapus = model.hapus_bacaan(data, args.nomor)
+    hapus = model.hapus_bacaan(data, nomor)
     model.simpan(args.data, data)
     print(f"Bacaan {hapus['tanggal']} ({_format_kwh(hapus['kwh'])} kWh) dihapus.")
 
