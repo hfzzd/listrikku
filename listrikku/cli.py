@@ -10,7 +10,7 @@ import argparse
 import os
 import sys
 
-from . import __version__, model, tarif, token
+from . import __version__, export, model, tarif, token
 
 
 def _nama_bulan(bulan):
@@ -81,6 +81,17 @@ def _parser():
                         help="Tanggal beli YYYY-MM-DD (bawaan: hari ini).")
     token_sub.add_parser(
         "sisa", help="Perkiraan sisa token + berapa hari lagi habis.")
+
+    ekspor = sub.add_parser(
+        "ekspor", help="Ekspor data ke CSV (tampil di layar / ke file).")
+    ekspor.add_argument("--jenis", required=True,
+                        choices=["bacaan", "laporan", "token"],
+                        help="Jenis data: bacaan, laporan, atau token.")
+    ekspor.add_argument("--bulan", default=None,
+                        help="Bulan laporan, format YYYY-MM "
+                        "(wajib bila --jenis laporan).")
+    ekspor.add_argument("--keluar", default=None,
+                        help="Tulis ke file ini (tanpa itu tampil di layar).")
 
     return p
 
@@ -296,6 +307,34 @@ def _cmd_token_sisa(args):
           "bisa berbeda.")
 
 
+def _cmd_ekspor(args):
+    data = model.muat(args.data)
+    if args.jenis == "bacaan":
+        teks = export.bacaan_csv(data)
+    elif args.jenis == "token":
+        teks = export.token_csv(data)
+    else:
+        if not args.bulan:
+            raise model.ListrikKuError(
+                "Ekspor laporan butuh --bulan, misal: "
+                "listrikku ekspor --jenis laporan --bulan 2026-11")
+        try:
+            tahun, bulan = (int(x) for x in args.bulan.split("-"))
+            if not (1 <= bulan <= 12) or len(args.bulan) != 7:
+                raise ValueError
+        except ValueError:
+            raise model.ListrikKuError(
+                f"Bulan '{args.bulan}' tidak valid "
+                "(pakai format YYYY-MM, misal 2026-11).")
+        teks = export.laporan_csv(data, tahun, bulan)
+    if args.keluar:
+        with open(args.keluar, "w", encoding="utf-8") as f:
+            f.write(teks)
+        print(f"Diekspor ke {args.keluar}.")
+    else:
+        print(teks, end="")
+
+
 def main(argv=None):
     args = _parser().parse_args(argv)
     try:
@@ -319,6 +358,8 @@ def main(argv=None):
             _cmd_token_beli(args)
         elif args.perintah == "token" and args.aksi == "sisa":
             _cmd_token_sisa(args)
+        elif args.perintah == "ekspor":
+            _cmd_ekspor(args)
     except model.ListrikKuError as e:
         print(f"listrikku: {e}", file=sys.stderr)
         return 1
