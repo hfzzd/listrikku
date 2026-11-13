@@ -8,9 +8,24 @@ Contoh pemakaian:
 
 import argparse
 import os
+import re
 import sys
 
 from . import __version__, export, model, tarif, token
+
+
+def _angka(teks, nama, contoh):
+    """Ubah teks menjadi angka; bila bukan angka, beri pesan ramah.
+
+    `nama` adalah nama argumennya (misal "Nominal"), `contoh` adalah
+    contoh pemakaian yang benar untuk ditampilkan.
+    """
+    try:
+        return float(teks)
+    except (TypeError, ValueError):
+        raise model.ListrikKuError(
+            f"{nama} '{teks}' tidak valid "
+            f"(pakai angka, misal: {contoh})")
 
 
 def _nama_bulan(bulan):
@@ -172,6 +187,7 @@ def _cmd_daya_lihat(args):
 
 
 def _cmd_tagihan(args):
+    ppj = _angka(args.ppj, "PPJ", "listrikku tagihan --ppj 3")
     data = model.muat(args.data)
     if not data["daya"]:
         raise model.ListrikKuError(
@@ -180,7 +196,7 @@ def _cmd_tagihan(args):
             "listrikku daya atur 1300")
     proyeksi = tarif.proyeksi_bulan_berjalan(data)
     hasil = tarif.hitung_tagihan(
-        proyeksi["proyeksi_kwh"], data["daya"], data["rtm"], args.ppj)
+        proyeksi["proyeksi_kwh"], data["daya"], data["rtm"], ppj)
     bulan = _nama_bulan(proyeksi["bulan"])
     print(f"Perkiraan tagihan {bulan} {proyeksi['tahun']} (pascabayar)")
     print(f"Daya terpasang : {_format_daya(data['daya'], data['rtm'])}")
@@ -273,14 +289,18 @@ def _cmd_laporan(args):
 
 
 def _cmd_token_beli(args):
-    try:
-        nominal = float(args.nominal)
-    except (TypeError, ValueError):
+    nominal = _angka(args.nominal, "Nominal",
+                     "listrikku token beli --nominal 100000")
+    if (isinstance(args.nominal, str)
+            and re.fullmatch(r"\d{1,3}(\.\d{3})+", args.nominal)):
+        # "20.000" ala Indonesia dibaca float sebagai 20,0 — jelaskan.
         raise model.ListrikKuError(
-            f"Nominal '{args.nominal}' tidak valid "
-            "(pakai angka, misal: listrikku token beli --nominal 100000)")
+            f"Nominal '{args.nominal}' dibaca sebagai "
+            f"{_format_rupiah(nominal)} — tulis tanpa pemisah ribuan, "
+            "misal: listrikku token beli --nominal 20000")
+    ppj = _angka(args.ppj, "PPJ", "listrikku token beli --nominal 100000 --ppj 3")
     data = model.muat(args.data)
-    entri, hasil = token.beli_token(data, nominal, args.ppj, args.tanggal)
+    entri, hasil = token.beli_token(data, nominal, ppj, args.tanggal)
     model.simpan(args.data, data)
     print(f"Token {entri['tanggal']}: {_format_rupiah(entri['nominal'])} "
           f"-> {_format_kwh(entri['kwh'])} kWh")
@@ -313,13 +333,8 @@ def _cmd_token_sisa(args):
 
 
 def _cmd_token_ingatkan(args):
-    try:
-        ambang = float(args.ambang)
-    except (TypeError, ValueError):
-        raise model.ListrikKuError(
-            f"Ambang '{args.ambang}' tidak valid "
-            "(pakai angka hari, misal: listrikku token ingatkan "
-            "--ambang 5)")
+    ambang = _angka(args.ambang, "Ambang",
+                    "listrikku token ingatkan --ambang 5")
     if ambang < 0:
         raise model.ListrikKuError("Ambang tidak boleh negatif.")
     data = model.muat(args.data)

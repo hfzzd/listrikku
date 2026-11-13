@@ -25,7 +25,7 @@ def token_kwh(nominal, daya, rtm=False, ppj=0.0):
         raise model.ListrikKuError(f"Nominal '{nominal}' tidak valid.")
     if nominal < NOMINAL_MIN:
         raise model.ListrikKuError(
-            f"Nominal token minimal Rp{NOMINAL_MIN:,} — denominasi "
+            "Nominal token minimal Rp20.000 — denominasi "
             "token PLN mulai Rp20.000.")
     try:
         ppj = float(ppj)

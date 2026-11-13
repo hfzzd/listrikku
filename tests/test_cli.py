@@ -156,6 +156,45 @@ class TestInputSalah(CliTestCase):
         self.assertEqual(kode, 1)
         self.assertIn("Daya belum diatur", galat)
 
+    def test_ppj_bukan_angka_exit_1_pesan_ramah(self):
+        self._isi_contoh()
+        kode, _, galat = jalankan(*self._data(), "tagihan", "--ppj", "abc")
+        self.assertEqual(kode, 1)
+        self.assertIn("tidak valid", galat)
+        self.assertIn("--ppj 3", galat)
+
+    def test_token_beli_nominal_bukan_angka_exit_1(self):
+        self._isi_contoh()
+        kode, _, galat = jalankan(*self._data(), "token", "beli",
+                                  "--nominal", "abc")
+        self.assertEqual(kode, 1)
+        self.assertIn("tidak valid", galat)
+        self.assertIn("--nominal 100000", galat)
+
+    def test_token_beli_ppj_bukan_angka_exit_1(self):
+        self._isi_contoh()
+        kode, _, galat = jalankan(*self._data(), "token", "beli",
+                                  "--nominal", "100000", "--ppj", "abc")
+        self.assertEqual(kode, 1)
+        self.assertIn("tidak valid", galat)
+
+    def test_token_beli_nominal_format_ribuan_diberi_petunjuk(self):
+        # "20.000" ala Indonesia dibaca 20,0 — beri petunjuk, bukan
+        # sekadar menolak karena di bawah minimum.
+        self._isi_contoh()
+        kode, _, galat = jalankan(*self._data(), "token", "beli",
+                                  "--nominal", "20.000")
+        self.assertEqual(kode, 1)
+        self.assertIn("tanpa pemisah ribuan", galat)
+        self.assertIn("--nominal 20000", galat)
+
+    def test_token_ingatkan_ambang_bukan_angka_exit_1(self):
+        self._isi_contoh()
+        kode, _, galat = jalankan(*self._data(), "token", "ingatkan",
+                                  "--ambang", "abc")
+        self.assertEqual(kode, 1)
+        self.assertIn("tidak valid", galat)
+
     def test_ppj_negatif_exit_1(self):
         self._isi_contoh()
         kode, _, galat = jalankan(*self._data(), "tagihan", "--ppj", "-3")
@@ -196,14 +235,14 @@ class TestInputSalah(CliTestCase):
 
 
 class TestVersion(CliTestCase):
-    def test_version_tampil_0_1_0(self):
-        self.assertEqual(__version__, "0.1.0")
+    def test_version_tampil_0_2_0(self):
+        self.assertEqual(__version__, "0.2.0")
         keluar = io.StringIO()
         with redirect_stdout(keluar):
             with self.assertRaises(SystemExit) as cm:
                 cli.main(["--version"])
         self.assertEqual(cm.exception.code, 0)
-        self.assertIn("listrikku 0.1.0", keluar.getvalue())
+        self.assertIn("listrikku 0.2.0", keluar.getvalue())
 
 
 if __name__ == "__main__":
