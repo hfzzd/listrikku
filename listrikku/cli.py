@@ -69,7 +69,7 @@ def _parser():
                          help="Bulan yang dilaporkan, format YYYY-MM.")
 
     token_p = sub.add_parser(
-        "token", help="Token listrik prabayar: beli & cek sisa.")
+        "token", help="Token listrik prabayar: beli, cek sisa & ingatkan.")
     token_sub = token_p.add_subparsers(dest="aksi", required=True)
     t_beli = token_sub.add_parser(
         "beli", help="Beli token: hitung kWh dari nominal rupiah.")
@@ -81,6 +81,11 @@ def _parser():
                         help="Tanggal beli YYYY-MM-DD (bawaan: hari ini).")
     token_sub.add_parser(
         "sisa", help="Perkiraan sisa token + berapa hari lagi habis.")
+    t_ingatkan = token_sub.add_parser(
+        "ingatkan", help="Pengingat isi ulang token bila hampir habis.")
+    t_ingatkan.add_argument("--ambang", default=3,
+                            help="Ingatkan bila sisa token <= N hari "
+                            "(bawaan: 3).")
 
     ekspor = sub.add_parser(
         "ekspor", help="Ekspor data ke CSV (tampil di layar / ke file).")
@@ -307,6 +312,39 @@ def _cmd_token_sisa(args):
           "bisa berbeda.")
 
 
+def _cmd_token_ingatkan(args):
+    try:
+        ambang = float(args.ambang)
+    except (TypeError, ValueError):
+        raise model.ListrikKuError(
+            f"Ambang '{args.ambang}' tidak valid "
+            "(pakai angka hari, misal: listrikku token ingatkan "
+            "--ambang 5)")
+    if ambang < 0:
+        raise model.ListrikKuError("Ambang tidak boleh negatif.")
+    data = model.muat(args.data)
+    hasil = token.sisa_token(data)
+    beli = hasil["pembelian"]
+    print(f"Token terakhir: {beli['tanggal']} — "
+          f"{_format_rupiah(beli['nominal'])} "
+          f"({_format_kwh(beli['kwh'])} kWh)")
+    print(f"Sisa token        : {_format_kwh(hasil['sisa_kwh'])} kWh")
+    if hasil["hari_tersisa"] is None:
+        print("Perkiraan habis   : belum bisa dihitung "
+              "(rata-rata harian 0 — cek bacaan meteran).")
+        return
+    print(f"Perkiraan habis   : {hasil['hari_tersisa']:.0f} hari lagi "
+          f"(sekitar {hasil['tanggal_habis']})")
+    if hasil["hari_tersisa"] <= ambang:
+        print(f"⚠ Token hampir habis — tersisa {hasil['hari_tersisa']:.0f} "
+              f"hari (ambang {ambang:g} hari). Segera isi ulang sebelum "
+              "gelap.")
+    else:
+        print(f"Token masih cukup untuk sekitar "
+              f"{hasil['hari_tersisa']:.0f} hari "
+              f"(ambang pengingat {ambang:g} hari).")
+
+
 def _cmd_ekspor(args):
     data = model.muat(args.data)
     if args.jenis == "bacaan":
@@ -358,6 +396,8 @@ def main(argv=None):
             _cmd_token_beli(args)
         elif args.perintah == "token" and args.aksi == "sisa":
             _cmd_token_sisa(args)
+        elif args.perintah == "token" and args.aksi == "ingatkan":
+            _cmd_token_ingatkan(args)
         elif args.perintah == "ekspor":
             _cmd_ekspor(args)
     except model.ListrikKuError as e:
