@@ -79,6 +79,8 @@ def _parser():
                         help="PPJ daerah dalam persen (bawaan: 0).")
     t_beli.add_argument("--tanggal", default=None,
                         help="Tanggal beli YYYY-MM-DD (bawaan: hari ini).")
+    token_sub.add_parser(
+        "sisa", help="Perkiraan sisa token + berapa hari lagi habis.")
 
     return p
 
@@ -274,6 +276,26 @@ def _cmd_token_beli(args):
           "'token sisa'.")
 
 
+def _cmd_token_sisa(args):
+    data = model.muat(args.data)
+    hasil = token.sisa_token(data)
+    beli = hasil["pembelian"]
+    print(f"Token terakhir: {beli['tanggal']} — "
+          f"{_format_rupiah(beli['nominal'])} "
+          f"({_format_kwh(beli['kwh'])} kWh)")
+    print(f"Terpakai sejak beli: {_format_kwh(hasil['dipakai_kwh'])} kWh")
+    print(f"Sisa token        : {_format_kwh(hasil['sisa_kwh'])} kWh")
+    print(f"Rata-rata harian  : {_format_kwh(hasil['rata_harian'])} "
+          "kWh/hari (periode terakhir)")
+    if hasil["hari_tersisa"] is not None:
+        print(f"Perkiraan habis   : {hasil['hari_tersisa']:.0f} hari lagi "
+              f"(sekitar {hasil['tanggal_habis']})")
+        if hasil["hari_tersisa"] <= 3:
+            print("⚠ Token hampir habis — isi ulang sebelum gelap.")
+    print("Perkiraan dari rata-rata harianmu — pemakaian sebenarnya "
+          "bisa berbeda.")
+
+
 def main(argv=None):
     args = _parser().parse_args(argv)
     try:
@@ -295,6 +317,8 @@ def main(argv=None):
             _cmd_laporan(args)
         elif args.perintah == "token" and args.aksi == "beli":
             _cmd_token_beli(args)
+        elif args.perintah == "token" and args.aksi == "sisa":
+            _cmd_token_sisa(args)
     except model.ListrikKuError as e:
         print(f"listrikku: {e}", file=sys.stderr)
         return 1

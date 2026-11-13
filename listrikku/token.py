@@ -45,6 +45,69 @@ def token_kwh(nominal, daya, rtm=False, ppj=0.0):
     }
 
 
+def pemakaian_sejak(data, tanggal):
+    """Pemakaian (kWh) sejak `tanggal` sampai bacaan terakhir.
+
+    Periode antar bacaan dibagi proporsional per hari, supaya tanggal
+    beli yang jatuh di tengah periode tetap terhitung adil.
+    """
+    t_beli = datetime.strptime(tanggal, "%Y-%m-%d").date()
+    bacaan = model.daftar_bacaan(data)
+    if not bacaan:
+        return 0.0
+    t_akhir = datetime.strptime(bacaan[-1]["tanggal"], "%Y-%m-%d").date()
+    total = 0.0
+    for p in model.hitung_pemakaian(data):
+        t_awal = datetime.strptime(p["dari"], "%Y-%m-%d").date()
+        t_sampai = datetime.strptime(p["sampai"], "%Y-%m-%d").date()
+        awal = max(t_awal, t_beli)
+        akhir = min(t_sampai, t_akhir)
+        tumpang = (akhir - awal).days
+        if tumpang <= 0:
+            continue
+        total += p["kwh"] * tumpang / p["hari"]
+    return round(total, 3)
+
+
+def sisa_token(data, tanggal_acuan=None):
+    """Perkiraan sisa token dari pembelian terakhir.
+
+    Sisa kWh = kWh token terakhir − pemakaian sejak tanggal beli.
+    Hari tersisa dihitung dari rata-rata harian periode terakhir.
+    Mengembalikan rincian lengkap untuk ditampilkan.
+    """
+    pembelian = sorted(data.get("token", []), key=lambda t: t["tanggal"])
+    if not pembelian:
+        raise model.ListrikKuError(
+            "Belum ada pembelian token yang tercatat. Beli dulu dengan "
+            "'token beli --nominal 100000'.")
+    terakhir = pembelian[-1]
+    periode = model.hitung_pemakaian(data)
+    if not periode:
+        raise model.ListrikKuError(
+            "Belum cukup data untuk memperkirakan sisa token — catat "
+            "minimal 2 bacaan meteran dulu dengan 'meter tambah'.")
+    dipakai = pemakaian_sejak(data, terakhir["tanggal"])
+    sisa = round(max(0.0, terakhir["kwh"] - dipakai), 3)
+    rata_harian = periode[-1]["rata_harian"]
+    hari_ini = tanggal_acuan or date.today()
+    if rata_harian > 0:
+        hari_tersisa = round(sisa / rata_harian, 1)
+        tanggal_habis = hari_ini + timedelta(days=int(sisa / rata_harian))
+    else:
+        hari_tersisa = None
+        tanggal_habis = None
+    return {
+        "pembelian": terakhir,
+        "dipakai_kwh": dipakai,
+        "sisa_kwh": sisa,
+        "rata_harian": rata_harian,
+        "hari_tersisa": hari_tersisa,
+        "tanggal_habis": tanggal_habis.isoformat() if tanggal_habis else None,
+        "tanggal_acuan": hari_ini.isoformat(),
+    }
+
+
 def beli_token(data, nominal, ppj=0.0, tanggal=None):
     """Beli token: hitung kWh-nya lalu simpan pembelian ke data.
 
